@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html>
+	<head>
+    <!-- Mapbox GL JS JavaScript file-->
+    <script src='https://api.mapbox.com/mapbox-gl-js/v0.34.0/mapbox-gl.js'></script>
+    <!-- Mapbox GL JS CSS file-->
+    <link href='https://api.mapbox.com/mapbox-gl-js/v0.34.0/mapbox-gl.css' rel='stylesheet' />
+    <style>
+      body:{width:100%; height:100vh;}
+			#coords {
+				display: block;
+				position: relative;
+				width: 120px;
+				max-width: 300px;
+				padding: 5px;
+				text-align: center;
+				background: #fff;
+			}
+
+			#menu {
+				background: #fff;
+        position: absolute;
+        z-index: 1;
+        top: 10px;
+        right: 10px;
+        border-radius: 3px;
+        width: 120px;
+				height: 30px;
+        border: 1px solid rgba(0,0,0,0.4);
+				margin-top: 60px;
+				margin-right: 20px;
+        font-family: 'Open Sans', sans-serif;
+			}
+
+			#menu a {
+				background: #fff;
+        font-size: 13px;
+        color: #404040;
+        display: block;
+        margin: 0;
+        padding: 0;
+        padding: 10px;
+        text-decoration: none;
+        border-bottom: 1px solid rgba(0,0,0,0.25);
+        text-align: center;
+    }
+
+    #menu a:last-child {
+        border: none;
+    }
+
+    #menu a:hover {
+        background-color: #f8f8f8;
+        color: #404040;
+    }
+
+    #menu a.active {
+        background-color: #3887be;
+        color: #ffffff;
+    }
+
+    #menu a.active:hover {
+        background: #3074a4;
+    }
+    </style>
+	</head>
+  <!-- Add style property to body
+       Set width: 100% and height 100vh-->
+	<body style='width: 100%; height: 100vh; margin:0'>
+    <!-- Add map to the file-->
+		<pre id='coords'></pre>
+		<pre id='menu'></pre>
+    <div id='map' style='width: 100%; height: 100%;'></div>
+      <script>
+				mapboxgl.accessToken = 'pk.eyJ1IjoiYWtrYXJoIiwiYSI6ImNqMThjNHllMTA3MXczOHFzeXZza2hpbXkifQ.W-eBkYLcQLAoZCKLGWxDgQ';
+				var map = new mapboxgl.Map({
+				  container: 'map',
+				  style: 'mapbox://styles/mapbox/streets-v9',
+				  center: [-122.333592, 47.605628],
+				  zoom: 15, // Starts at at Seattle by default
+				});
+				// Need to start the http server for the data to be visible
+				map.on('load', function () {
+				  // Custom rolled vector tiles
+				  map.addSource('pedestrian', {
+				    type: 'vector',
+				    tiles: ['http://localhost:8000/pedestrian/{z}/{x}/{y}.pbf'],
+				  });
+				  // Add sidewalks
+				  map.addLayer({
+				    id : 'sidewalks',
+				    type: 'line',
+				    source: 'pedestrian',
+				    'source-layer': 'sidewalks',
+				    'layout': {
+				        'visibility': 'visible',
+				        'line-join': 'round',
+				        'line-cap': 'round'
+				    },
+				    'paint': {
+				      'line-color': '#B1C27A',
+				      'line-width': 3
+				    },
+				  });
+				  // Add crossings
+				  map.addLayer({
+				    id: 'crossings',
+				    type: 'line',
+				    source: 'pedestrian',
+				    'source-layer': 'crossings',
+				    layout: {
+				        visibility: 'visible',
+				        'line-join': 'round',
+				        'line-cap': 'round'
+				    },
+				    'paint': {
+				      'line-color': '#FF7F50',
+				      'line-width': 3
+				    },
+				  });
+				});
+				// Hover on the map to see the longitude and latitude coordinates
+				map.on('mousemove', function(e) {
+				  document.getElementById('coords').innerHTML = JSON.stringify(e.point) + JSON.stringify(e.lngLat);
+				});
+
+				// choose which layers to display
+				var layerids = ['sidewalks', 'crossings'];
+				for (var i = 0; i < layerids.length; i++) {
+				  var id = layerids[i];
+				  var link = document.createElement('a');
+				  link.href = '#';
+				  link.className = 'active';
+				  link.textContent = id;
+				  link.onclick = function(e) {
+				    var clickedLayer = this.textContent;
+				    e.preventDefault();
+				    e.stopPropagation();
+				    var visibility = map.getLayoutProperty(clickedLayer, 'visibility');
+				    if (visibility === 'visible') {
+				      map.setLayoutProperty(clickedLayer, 'visibility', 'none');
+				      this.className = '';
+				    } else {
+				      this.className = 'active';
+				      map.setLayoutProperty(clickedLayer, 'visibility', 'visible');
+				    }
+
+				  };
+				  var layers = document.getElementById('menu');
+				  layers.appendChild(link);
+				};
+
+				// Change the cursor when it is on the sidewalks layer
+				map.on('mouseenter', 'sidewalks', function() {
+				  map.getCanvas().style.cursor = 'pointer';
+				});
+
+				// Change the cursor back when it leaves sidewalks
+				map.on('mouseleave', 'sidewalks', function() {
+				  map.getCanvas().style.cursor = '';
+				});
+
+				map.on('click', function(e) {
+					var bbox = [[e.point.x - 5, e.point.y - 5], [e.point.x + 5, e.point.y + 5]];
+					var features = map.queryRenderedFeatures(bbox, { layers: ['grade'] }); 
+				});
+
+				var construction;
+				function loadJSON(callback) {
+					// placing a new XMLHttpRequest
+					var xobj = new XMLHttpRequest();
+							xobj.overrideMimeType("application/geojson"); // overrides the mime type returned by the server.
+					xobj.open('GET', 'geoJsonFiles/construction.geojson', true);
+					xobj.onreadystatechange = function() {
+						if (xobj.readyState == 4 && xobj.status == "200") {
+							callback(xobj.responseText);
+						} else if (xobj.status === 404 && file !== "construction.geojson") {
+							loadJSON("construction.geojson", callback);
+						}
+					}
+
+					xobj.send(null);
+				}
+				// Call the loadJSON function
+				loadJSON(function(response) {
+	    		var actual_JSON = JSON.parse(response);
+				});
+
+      </script>
+	</body>
+</html>
