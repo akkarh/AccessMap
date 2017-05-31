@@ -1,0 +1,142 @@
+<html>
+  <head>
+    <!-- Mapbox GL JS JavaScript file-->
+    <script src='https://api.mapbox.com/mapbox-gl-js/v0.34.0/mapbox-gl.js'></script>
+    <!-- Mapbox GL JS CSS file-->
+    <link href='https://api.mapbox.com/mapbox-gl-js/v0.34.0/mapbox-gl.css' rel='stylesheet' />
+    <!-- Load the minified file-->
+    <script src='https://npmcdn.com/@turf/turf/turf.min.js'></script>
+    <script src='http://code.jquery.com/jquery-3.2.1.min.js'></script>
+    <style>
+      body:{width:100%; height:100vh;}
+    </style>
+  </head>
+  <body>
+    <div id='map' style='width: 100%; height: 100%;'></div>
+      <script>
+				mapboxgl.accessToken = 'pk.eyJ1IjoiYWtrYXJoIiwiYSI6ImNqMThjNHllMTA3MXczOHFzeXZza2hpbXkifQ.W-eBkYLcQLAoZCKLGWxDgQ';
+				var map = new mapboxgl.Map({
+				  container: 'map',
+				  style: 'mapbox://styles/mapbox/streets-v9',
+				  center: [-122.333592, 47.605628],
+				  zoom: 15, // Starts at at Seattle by default
+				});
+
+        // Point to be used on load
+        var origin = {
+          type: 'FeatureCollection',
+          features: [{
+            type: 'Feature',
+            geometry: {
+              type: 'Point',
+              coordinates: [-122.33747226325991, 47.611531556855084] // start
+            },
+            properties: {
+              cost: 0
+            }
+          }]
+        };
+
+        //
+        map.on('load', function() {
+          // Figure out what this code this doing!!!
+          // --------------------------------------------------------------
+          let isochroneData = {
+            type: 'FeatureCollection',
+            features: []
+          };
+
+          // Add isochroneData
+          map.addSource('isochrones', {
+            'type': "geojson",
+            'data': isochroneData
+          });
+
+          // Add layer with isochrones
+          map.addLayer({
+            'id': 'isochrones',
+            'type': 'line',
+            'source': 'isochrones',
+            'paint': {
+              'line-opacity': 0.7,
+              'line-color': {
+                'property': 'cost',
+                'stops': [
+                  [200, '#0f0'],
+                  [900, '#f00']
+                ],
+              }
+            }
+          });
+
+          // ------------------------------------------------
+          map.addSource('travelcost', {
+            'type': "geojson",
+            'data': "http://localhost:8000/travelcost.geojson"
+          });
+          map.addLayer({
+            'id': 'travelcost',
+            'type': "circle",
+            'source': 'travelcost',
+            'paint': {
+                'circle-color': {
+                  'property': 'cost',
+                  'stops': [
+                    [200, '#0f0'],
+                    [500, '#f00']
+                  ],
+                },
+                'circle-radius': 3
+            }
+          });
+
+          // To place a marker at the current location
+          map.addSource('origin', {
+            'type': 'geojson',
+            'data': origin
+          });
+
+          // Draw the outline for origin
+          map.addLayer({
+            'id': 'origin-outline',
+            'type': "circle",
+            'source':'origin',
+            'paint' : {
+              'circle-radius': 12,
+              'circle-color': '#fff'
+            }
+          });
+
+          // Fill in the outline
+          map.addLayer({
+            'id': 'origin',
+            'type': "circle",
+            'source': 'origin',
+            'paint' : {
+              'circle-radius': 10,
+              'circle-color': '#39f'
+            }
+          });
+
+          $.get('http://localhost:8000/travelcost.geojson')
+          .done(function(data) {
+            data = JSON.parse(data); // to convert from strings
+            // drawIsochrone(data)
+            drawTIN(data)
+          });
+
+          function drawTIN(isopoints) {
+            let polygons = turf.tin(isopoints, 'cost');
+            map.getSource('isochrones').setData(polygons);
+          };
+
+          function drawIsochrone(isopoints) {
+            let breaks = [0, 200, 500, 1000, 2500];
+            let lines = turf.isolines(isopoints, 'cost', 20, breaks);
+            map.getSource('isochrones').setData(lines);
+          }
+        })
+      </script>
+    </div>
+  </body>
+</html>
